@@ -20,6 +20,7 @@ type TelegramService struct {
 	updateChan   chan tgbotapi.Update
 	botCommands  map[string]func(*tgbotapi.Message)
 	botChatTexts map[string]func(*tgbotapi.Message)
+	fb           *FacebookService
 }
 
 func (ts *TelegramService) Name() string {
@@ -47,8 +48,15 @@ func (ts *TelegramService) Init(fb2tg *Fb2Telegram) error {
 	ts.botCommands = make(map[string]func(*tgbotapi.Message))
 	ts.botChatTexts = make(map[string]func(*tgbotapi.Message))
 	ts.botCommands["/start"] = ts.onStartCommand
+	ts.botCommands["/nearest"] = ts.onNearestEvents
 	ts.botCommands["/help"] = ts.onHelpCommand
+	ts.botCommands["/remindme"] = ts.onRemindMeCommand
+	ts.botCommands["/start@ololohaus_bot"] = ts.onStartCommand
+	ts.botCommands["/nearest@ololohaus_bot"] = ts.onNearestEvents
+	ts.botCommands["/help@ololohaus_bot"] = ts.onHelpCommand
+	ts.botCommands["/remindme@ololohaus_bot"] = ts.onRemindMeCommand
 	ts.botChatTexts["привет"] = ts.onStartCommand
+	ts.fb = ts.fb2tg.FacebookService()
 
 	return nil
 }
@@ -96,7 +104,13 @@ func (ts *TelegramService) handleRun() {
 				ts.botChatTexts[message](update.Message)
 			}
 		}
-
+		if ts.bot.IsMessageToMe(*update.Message) {
+			message := strings.ToLower(update.Message.Text)
+			ts.logger.Info(message)
+			if _, ok := ts.botChatTexts[message]; ok {
+				ts.botChatTexts[message](update.Message)
+			}
+		}
 		if update.Message.IsCommand() {
 			ts.logger.Info(update.Message.Text)
 			if _, ok := ts.botCommands[update.Message.Text]; ok {
@@ -128,6 +142,18 @@ func (ts *TelegramService) onHelpCommand(message *tgbotapi.Message) {
             /nearest - ближайшие наши события
             /remindme - напоминать тебе о событиях утром каждого дня, когда у нас будет событие
         `)
+	msg.ReplyToMessageID = message.MessageID
+	ts.bot.Send(msg)
+}
+
+func (ts *TelegramService) onNearestEvents(message *tgbotapi.Message) {
+	msg := tgbotapi.NewMessage(message.Chat.ID, ts.fb.GetEventMessage())
+	msg.ReplyToMessageID = message.MessageID
+	ts.bot.Send(msg)
+}
+
+func (ts *TelegramService) onRemindMeCommand(message *tgbotapi.Message) {
+	msg := tgbotapi.NewMessage(message.Chat.ID, "Я пока-что не умею так делать")
 	msg.ReplyToMessageID = message.MessageID
 	ts.bot.Send(msg)
 }

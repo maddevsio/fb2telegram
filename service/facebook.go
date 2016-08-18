@@ -11,10 +11,10 @@ import (
 type FacebookService struct {
 	BaseService
 
-	logger  log.Logger
-	fb2tg   *Fb2Telegram
-	fbc     *fb.App
-	fbToken string
+	logger log.Logger
+	fb2tg  *Fb2Telegram
+	fbc    *fb.App
+	events []fb.Result
 }
 
 func (fs *FacebookService) Name() string {
@@ -51,8 +51,24 @@ func (fs *FacebookService) Run() error {
 			fs.logger.Errorf("error thile parsing time: %s", err)
 		}
 		if startTime.Sub(time.Now()).Hours() >= 1 {
+			fs.events = append(fs.events, item)
 			fs.logger.Infof("%s post: %s\n", item["start_time"], item["description"])
 		}
 	}
 	return nil
+}
+
+func (fs *FacebookService) GetEventMessage() string {
+	var message string
+	for _, item := range fs.events {
+		startTime, err := time.Parse("2006-01-02T15:04:05-0700", item["start_time"].(string))
+		if err != nil {
+			fs.logger.Errorf("Error while parsing date: %s", err)
+		}
+		message += startTime.Format("02-01 в 15:04 у нас ")
+
+		message += item["name"].(string)
+		message += "\n"
+	}
+	return message
 }

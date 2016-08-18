@@ -25,8 +25,8 @@ func NewFb2Telegram(config *conf.Fb2TelegramConfig) *Fb2Telegram {
 	pb.config = config
 	pb.logger = log.NewLogger("fb2telegram")
 	pb.services = make(map[string]Service)
-	pb.AddService(&TelegramService{})
 	pb.AddService(&FacebookService{})
+	pb.AddService(&TelegramService{})
 	return pb
 }
 
@@ -73,4 +73,12 @@ func (pb *Fb2Telegram) Stop() {
 // WaitStop blocks main thread and waits when all goroutines will be stopped
 func (pb *Fb2Telegram) WaitStop() {
 	pb.waitGroup.Wait()
+}
+
+func (pb *Fb2Telegram) FacebookService() *FacebookService {
+	service, ok := pb.services["facebook_service"]
+	if !ok {
+		pb.logger.Error("Error getting facebook_service")
+	}
+	return service.(*FacebookService)
 }
