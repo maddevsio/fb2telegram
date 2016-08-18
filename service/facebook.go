@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/gen1us2k/log"
 	fb "github.com/huandu/facebook"
@@ -31,7 +32,7 @@ func (fs *FacebookService) Init(fb2tg *Fb2Telegram) error {
 func (fs *FacebookService) Run() error {
 	fbToken := fs.fbc.AppAccessToken()
 	res, err := fb.Get(
-		fmt.Sprintf("/%s/posts", fs.fb2tg.Config().FacebookPageName),
+		fmt.Sprintf("/%s/events", fs.fb2tg.Config().FacebookPageName),
 		fb.Params{"access_token": fbToken},
 	)
 	if err != nil {
@@ -45,8 +46,12 @@ func (fs *FacebookService) Run() error {
 		return err
 	}
 	for _, item := range items {
-		if _, ok := item["message"]; ok {
-			fs.logger.Infof("%s post: %s\n", item["created_time"], item["message"])
+		startTime, err := time.Parse("2006-01-02T15:04:05-0700", item["start_time"].(string))
+		if err != nil {
+			fs.logger.Errorf("error thile parsing time: %s", err)
+		}
+		if startTime.Sub(time.Now()).Hours() >= 1 {
+			fs.logger.Infof("%s post: %s\n", item["start_time"], item["description"])
 		}
 	}
 	return nil
