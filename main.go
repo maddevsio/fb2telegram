@@ -5,9 +5,9 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/gen1us2k/fb2telegram/conf"
-	"github.com/gen1us2k/fb2telegram/service"
 	"github.com/gen1us2k/log"
+	"github.com/maddevsio/fb2telegram/conf"
+	"github.com/maddevsio/fb2telegram/service"
 	"github.com/urfave/cli"
 )
 

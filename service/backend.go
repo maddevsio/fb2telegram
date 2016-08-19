@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/gen1us2k/fb2telegram/conf"
 	"github.com/gen1us2k/log"
+	"github.com/maddevsio/fb2telegram/conf"
 )
 
 // Fb2Telegram is main struct of daemon
