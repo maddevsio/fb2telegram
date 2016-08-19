@@ -31,6 +31,7 @@ func (ts *TelegramService) Init(fb2tg *Fb2Telegram) error {
 	ts.fb2tg = fb2tg
 	ts.logger = log.NewLogger(ts.Name())
 	bot, err := tgbotapi.NewBotAPI(ts.fb2tg.Config().TelegramBotToken)
+
 	if err != nil {
 		return err
 	}
@@ -48,14 +49,7 @@ func (ts *TelegramService) Init(fb2tg *Fb2Telegram) error {
 	ts.botCommands = make(map[string]func(*tgbotapi.Message))
 	ts.botChatTexts = make(map[string]func(*tgbotapi.Message))
 	ts.botCommands["/start"] = ts.onStartCommand
-	ts.botCommands["/nearest"] = ts.onNearestEvents
 	ts.botCommands["/help"] = ts.onHelpCommand
-	ts.botCommands["/remindme"] = ts.onRemindMeCommand
-	ts.botCommands["/start@ololohaus_bot"] = ts.onStartCommand
-	ts.botCommands["/nearest@ololohaus_bot"] = ts.onNearestEvents
-	ts.botCommands["/help@ololohaus_bot"] = ts.onHelpCommand
-	ts.botCommands["/remindme@ololohaus_bot"] = ts.onRemindMeCommand
-	ts.botChatTexts["привет"] = ts.onStartCommand
 	ts.fb = ts.fb2tg.FacebookService()
 
 	return nil
@@ -82,73 +76,58 @@ func (ts *TelegramService) handleRun() {
 	for update := range ts.updateChan {
 		ts.logger.Infof("%+v\n", update)
 
-		if update.Message == nil {
-			continue
+		if update.Message != nil {
+			ts.onMessage(update.Message)
 		}
+		if update.CallbackQuery != nil {
+			ts.logger.Info("Answering")
+			ts.onNearestEvents(update.CallbackQuery.Message)
+			ts.bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, ""))
+		}
+		ts.logger.Infof("%+v\n", update.CallbackQuery)
 
-		if update.Message.Chat.IsGroup() {
-			_, err := ts.bot.GetMe()
-			if err != nil {
-				ts.logger.Errorf("Error: %s", err.Error())
-				continue
-			}
+	}
+}
+
+func (ts *TelegramService) onMessage(message *tgbotapi.Message) {
+	messageText := strings.ToLower(message.Text)
+	if message.IsCommand() {
+		ts.logger.Info(messageText)
+		if _, ok := ts.botCommands[messageText]; ok {
+			ts.botCommands[messageText](message)
 		}
-		me, err := ts.bot.GetMe()
-		if err != nil {
-			ts.logger.Error("Error getting myself: %s", err)
-		}
-		if me.UserName != update.Message.From.UserName {
-			message := strings.ToLower(update.Message.Text)
-			ts.logger.Info(message)
-			if _, ok := ts.botChatTexts[message]; ok {
-				ts.botChatTexts[message](update.Message)
-			}
-		}
-		if ts.bot.IsMessageToMe(*update.Message) {
-			message := strings.ToLower(update.Message.Text)
-			ts.logger.Info(message)
-			if _, ok := ts.botChatTexts[message]; ok {
-				ts.botChatTexts[message](update.Message)
-			}
-		}
-		if update.Message.IsCommand() {
-			ts.logger.Info(update.Message.Text)
-			if _, ok := ts.botCommands[update.Message.Text]; ok {
-				ts.botCommands[update.Message.Text](update.Message)
-			}
-		}
+		return
+	}
+	me, err := ts.bot.GetMe()
+	if err != nil {
+		ts.logger.Error("Error getting myself: %s", err)
+	}
+	if me.UserName != message.From.UserName {
+		ts.logger.Info(messageText)
+		ts.onNearestEvents(message)
 	}
 }
 
 func (ts *TelegramService) onStartCommand(message *tgbotapi.Message) {
-	msg := tgbotapi.NewMessage(
-		message.Chat.ID,
-		`
-            Привет! Я бот Ололохауса и я могу следующие вещи:
-            /start - начать работу со мной
-            /help - помощь
-            /nearest - ближайшие наши события
-            /remindme - напоминать тебе о событиях утром каждого дня, когда у нас будет событие
-        `)
-	msg.ReplyToMessageID = message.MessageID
+	msg := tgbotapi.NewMessage(message.Chat.ID, "Привет, меня зовут Ололоша и я могу сказать про")
+	msg.ReplyMarkup = ts.getKeyboard()
 	ts.bot.Send(msg)
 }
+
 func (ts *TelegramService) onHelpCommand(message *tgbotapi.Message) {
 	msg := tgbotapi.NewMessage(
 		message.Chat.ID,
 		`
             /start - начать работу со мной
             /help - помощь
-            /nearest - ближайшие наши события
-            /remindme - напоминать тебе о событиях утром каждого дня, когда у нас будет событие
         `)
-	msg.ReplyToMessageID = message.MessageID
+	msg.ReplyMarkup = ts.getKeyboard()
 	ts.bot.Send(msg)
 }
 
 func (ts *TelegramService) onNearestEvents(message *tgbotapi.Message) {
 	msg := tgbotapi.NewMessage(message.Chat.ID, ts.fb.GetEventMessage())
-	msg.ReplyToMessageID = message.MessageID
+	msg.ReplyMarkup = ts.getKeyboard()
 	ts.bot.Send(msg)
 }
 
@@ -156,4 +135,9 @@ func (ts *TelegramService) onRemindMeCommand(message *tgbotapi.Message) {
 	msg := tgbotapi.NewMessage(message.Chat.ID, "Я пока-что не умею так делать")
 	msg.ReplyToMessageID = message.MessageID
 	ts.bot.Send(msg)
+}
+
+func (ts *TelegramService) getKeyboard() tgbotapi.InlineKeyboardMarkup {
+	b := tgbotapi.NewInlineKeyboardButtonData("Ближайшие события", "nearest")
+	return tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(b))
 }
