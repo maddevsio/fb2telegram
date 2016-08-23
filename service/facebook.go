@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/gen1us2k/log"
@@ -17,6 +18,10 @@ type FacebookService struct {
 	events []fb.Result
 }
 
+type FbItems struct {
+	Data []fb.Result
+}
+
 func (fs *FacebookService) Name() string {
 	return "facebook_service"
 }
@@ -30,32 +35,46 @@ func (fs *FacebookService) Init(fb2tg *Fb2Telegram) error {
 	return nil
 }
 func (fs *FacebookService) Run() error {
+	fs.updateEvents()
+	for range time.Tick(time.Duration(3600) * time.Second) {
+		fs.updateEvents()
+	}
+	return nil
+}
+
+func (fs *FacebookService) updateEvents() {
 	fbToken := fs.fbc.AppAccessToken()
 	res, err := fb.Get(
 		fmt.Sprintf("/%s/events", fs.fb2tg.Config().FacebookPageName),
 		fb.Params{"access_token": fbToken},
 	)
 	if err != nil {
-		return err
+		fs.logger.Errorf("Error getting token: %s", err)
+		return
 	}
 
-	var items []fb.Result
-
-	err = res.DecodeField("data", &items)
+	var data []fb.Result
+	var events FbItems
+	err = res.DecodeField("data", &data)
 	if err != nil {
-		return err
+		fs.logger.Errorf("Error decoding Data: %s", err)
+		return
 	}
-	for _, item := range items {
+	fbItem := FbItems{
+		Data: data,
+	}
+	for _, item := range fbItem.Data {
 		startTime, err := time.Parse("2006-01-02T15:04:05-0700", item["start_time"].(string))
 		if err != nil {
 			fs.logger.Errorf("error thile parsing time: %s", err)
 		}
 		if startTime.Sub(time.Now()).Hours() >= 1 {
-			fs.events = append(fs.events, item)
+			events.Data = append(events.Data, item)
 			fs.logger.Infof("%s post: %s\n", item["start_time"], item["description"])
 		}
 	}
-	return nil
+	sort.Sort(events)
+	fs.events = events.Data
 }
 
 func (fs *FacebookService) GetEventMessage() string {
@@ -70,5 +89,20 @@ func (fs *FacebookService) GetEventMessage() string {
 		message += item["name"].(string)
 		message += "\n"
 	}
+	if message == "" {
+		message = "Пока-что ближайших событий нет. Следите за обновлением"
+	}
 	return message
+}
+
+func (d FbItems) Len() int {
+	return len(d.Data)
+}
+
+func (d FbItems) Less(i, j int) bool {
+	return d.Data[i]["start_time"].(string) < d.Data[j]["start_time"].(string)
+}
+
+func (d FbItems) Swap(i, j int) {
+	d.Data[i], d.Data[j] = d.Data[j], d.Data[i]
 }
